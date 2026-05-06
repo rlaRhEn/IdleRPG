@@ -118,8 +118,8 @@ public class AbilityUpgradePanelUI : MonoBehaviour
     void TryUpgradeAttack()
     {
         int cost = GetAttackCost(attackUpgradeLevel);
-        if (!TrySpendGold(cost) || playerMeleeAttack == null) return;
-        playerMeleeAttack.AddDamage(AttackAddValue);
+        if (!TrySpendGold(cost) || playerProgression == null) return;
+        playerProgression.AddPermanentBonuses(AttackAddValue, 0f, false);
         attackUpgradeLevel++;
         RefreshAll();
     }
@@ -127,8 +127,8 @@ public class AbilityUpgradePanelUI : MonoBehaviour
     void TryUpgradeHealth()
     {
         int cost = GetHealthCost(healthUpgradeLevel);
-        if (!TrySpendGold(cost) || playerHealth == null) return;
-        playerHealth.SetMaxHealth(playerHealth.MaxHealth + HealthAddValue, true);
+        if (!TrySpendGold(cost) || playerProgression == null) return;
+        playerProgression.AddPermanentBonuses(0f, HealthAddValue, true);
         healthUpgradeLevel++;
         RefreshAll();
     }

@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class AutoLightningStrikeSkill : MonoBehaviour
 {
-    [SerializeField] private bool unlocked = true;
+    [SerializeField] private bool unlocked = false;
     [SerializeField] private float castInterval = 3.5f;
     [SerializeField] private float searchRadius = 6f;
     [SerializeField] private int chainCount = 2;
@@ -26,6 +26,16 @@ public class AutoLightningStrikeSkill : MonoBehaviour
     public float CooldownNormalized => CooldownDuration <= 0f ? 0f : CooldownRemaining / CooldownDuration;
     public event System.Action<float, float> CooldownChanged;
     public event System.Action LightningCastTriggered;
+
+    public bool IsUnlocked => unlocked;
+
+    public void SetUnlocked(bool value)
+    {
+        unlocked = value;
+        if (!unlocked)
+            castTimer = 0f;
+        NotifyCooldownChanged();
+    }
 
     void Awake()
     {

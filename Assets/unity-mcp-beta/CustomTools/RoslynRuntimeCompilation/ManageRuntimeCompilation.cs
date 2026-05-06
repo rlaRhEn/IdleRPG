@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 #nullable disable
 using System;
 using System.Collections.Generic;
@@ -526,3 +527,4 @@ namespace MCPForUnity.Editor.Tools
         }
     }
 }
+#endif

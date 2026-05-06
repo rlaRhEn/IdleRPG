@@ -7,11 +7,13 @@ public class PlayerProgression : MonoBehaviour
     [SerializeField] private PlayerHealth playerHealth;
     [SerializeField] private PlayerMeleeAttack playerMeleeAttack;
     [SerializeField] private int startLevel = 1;
-    [SerializeField] private int startGold = 0;
+    [SerializeField] private int startGold = 100;
     [SerializeField] private int startExperience = 0;
     [SerializeField] private int baseRequiredExperience = 20;
     [SerializeField] private float requiredExperienceGrowth = 1.35f;
     [SerializeField] private bool healToFullOnLevelUp = true;
+    [SerializeField] private float bonusDamage;
+    [SerializeField] private float bonusMaxHealth;
 
     private int currentLevel;
     private int currentGold;
@@ -21,6 +23,8 @@ public class PlayerProgression : MonoBehaviour
     public int CurrentGold => currentGold;
     public int CurrentExperience => currentExperience;
     public int CurrentRequiredExperience => GetRequiredExperienceForLevel(currentLevel);
+    public float BonusDamage => bonusDamage;
+    public float BonusMaxHealth => bonusMaxHealth;
     public event Action ExperienceChanged;
 
     void Awake()
@@ -66,6 +70,33 @@ public class PlayerProgression : MonoBehaviour
         NotifyExperienceChanged();
     }
 
+    public void SetPermanentBonuses(float damageBonus, float maxHealthBonus, bool healToFull = false)
+    {
+        bonusDamage = Mathf.Max(0f, damageBonus);
+        bonusMaxHealth = Mathf.Max(0f, maxHealthBonus);
+        ApplyCombatStats(healToFull);
+        NotifyExperienceChanged();
+    }
+
+    public void AddPermanentBonuses(float damageBonusAdd, float maxHealthBonusAdd, bool healToFullForHealth = false)
+    {
+        bonusDamage = Mathf.Max(0f, bonusDamage + Mathf.Max(0f, damageBonusAdd));
+        bonusMaxHealth = Mathf.Max(0f, bonusMaxHealth + Mathf.Max(0f, maxHealthBonusAdd));
+        ApplyCombatStats(healToFullForHealth && maxHealthBonusAdd > 0f);
+        NotifyExperienceChanged();
+    }
+
+    public void ResetToInitialProgress()
+    {
+        currentLevel = Mathf.Max(1, startLevel);
+        currentGold = Mathf.Max(0, startGold);
+        currentExperience = Mathf.Max(0, startExperience);
+        bonusDamage = 0f;
+        bonusMaxHealth = 0f;
+        ApplyCombatStats(healToFull: true);
+        NotifyExperienceChanged();
+    }
+
     void TryLevelUp()
     {
         int requiredExp = GetRequiredExperienceForLevel(currentLevel);
@@ -95,8 +126,8 @@ public class PlayerProgression : MonoBehaviour
         if (statsData == null) return;
 
         int levelOffset = Mathf.Max(0, currentLevel - 1);
-        float maxHealth = statsData.BaseMaxHealth + statsData.HealthPerLevel * levelOffset;
-        float damage = statsData.BaseDamage + statsData.DamagePerLevel * levelOffset;
+        float maxHealth = statsData.BaseMaxHealth + statsData.HealthPerLevel * levelOffset + bonusMaxHealth;
+        float damage = statsData.BaseDamage + statsData.DamagePerLevel * levelOffset + bonusDamage;
         float attacksPerSecond = statsData.BaseAttacksPerSecond + statsData.AttacksPerSecondPerLevel * levelOffset;
 
         if (playerHealth != null)

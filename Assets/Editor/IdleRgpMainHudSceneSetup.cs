@@ -33,6 +33,8 @@ public static class IdleRgpMainHudSceneSetup
             return;
         }
 
+        EnsureCanvasScalerForMobile(hud);
+
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player == null)
         {
@@ -89,15 +91,25 @@ public static class IdleRgpMainHudSceneSetup
         using (var sto = new SerializedObject(topHud))
         {
             sto.FindProperty("playerProgression").objectReferenceValue = progression;
+            sto.FindProperty("playerHealth").objectReferenceValue = health;
+            sto.FindProperty("playerMeleeAttack").objectReferenceValue = player.GetComponent<PlayerMeleeAttack>();
+            sto.FindProperty("playerSkillLoadout").objectReferenceValue = player.GetComponent("PlayerSkillLoadout");
+            sto.FindProperty("playerWeaponLoadout").objectReferenceValue = player.GetComponent("PlayerWeaponLoadout");
+            sto.FindProperty("offlineRewardManager").objectReferenceValue = player.GetComponent("OfflineRewardManager");
             sto.FindProperty("profileImage").objectReferenceValue =
                 topLeftRoot.Find("ProfileImage")?.GetComponent<Image>();
             sto.FindProperty("goldText").objectReferenceValue =
                 topLeftRoot.Find("GoldText")?.GetComponent<Text>();
+            sto.FindProperty("combatPowerText").objectReferenceValue =
+                topLeftRoot.Find("CombatPowerText")?.GetComponent<Text>();
+            sto.FindProperty("resetProgressButton").objectReferenceValue =
+                topLeftRoot.Find("ResetProgressButton")?.GetComponent<Button>();
             sto.ApplyModifiedProperties();
         }
 
         EnsureOfflineRewardRoot(hud, player);
         EnsureBottomRightSkillSlots(hud, player);
+        EnsureSafeAreaAdapter(hud);
 
         Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
 
@@ -142,6 +154,32 @@ public static class IdleRgpMainHudSceneSetup
         var rt = expTf.GetComponent<RectTransform>();
         if (rt != null)
             LayoutHorizontalBar(rt, 620f, 30f, new Vector2(0f, 168f));
+    }
+
+    static void EnsureCanvasScalerForMobile(Canvas hud)
+    {
+        CanvasScaler scaler = hud.GetComponent<CanvasScaler>();
+        if (scaler == null)
+            scaler = Undo.AddComponent<CanvasScaler>(hud.gameObject);
+
+        Undo.RecordObject(scaler, "CanvasScaler mobile");
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
+    }
+
+    static void EnsureSafeAreaAdapter(Canvas hud)
+    {
+        Component adapter = GetOrAddComponentByTypeName(hud.gameObject, "HudMobileLayoutAdapter");
+        if (adapter == null) return;
+
+        using SerializedObject so = new SerializedObject(adapter);
+        so.FindProperty("hudCanvas").objectReferenceValue = hud;
+        so.FindProperty("topLeftHud").objectReferenceValue = hud.transform.Find("TopLeft_ProfileHud")?.GetComponent<RectTransform>();
+        so.FindProperty("bottomCenterHud").objectReferenceValue = hud.transform.Find("BottomCenter_Hud")?.GetComponent<RectTransform>();
+        so.FindProperty("bottomRightSkillSlots").objectReferenceValue = hud.transform.Find("BottomRight_SkillSlots")?.GetComponent<RectTransform>();
+        so.ApplyModifiedProperties();
     }
 
     static void RemoveComponentIfExists<T>(GameObject go) where T : Component
@@ -198,7 +236,7 @@ public static class IdleRgpMainHudSceneSetup
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(16f, -12f);
-            rt.sizeDelta = new Vector2(340f, 96f);
+            rt.sizeDelta = new Vector2(360f, 220f);
             go.GetComponent<Image>().color = new Color(0.08f, 0.1f, 0.14f, 0.88f);
 
             CreateUiImageChild(go.transform, "ProfileImage", new Vector2(72f, 72f), new Vector2(44f, -48f),
@@ -206,6 +244,10 @@ public static class IdleRgpMainHudSceneSetup
 
             CreateUiTextChild(go.transform, "GoldText", "Gold 0", 20, TextAnchor.MiddleLeft,
                 new Vector2(200f, 28f), new Vector2(108f, -30f), new Color(1f, 0.9f, 0.35f, 1f));
+            CreateUiTextChild(go.transform, "CombatPowerText", "전투력 0", 18, TextAnchor.MiddleLeft,
+                new Vector2(220f, 28f), new Vector2(108f, -60f), new Color(0.72f, 0.9f, 1f, 1f));
+            EnsurePanelActionButton(go.transform, "ResetProgressButton", "기록 초기화",
+                new Vector2(16f, 14f), new Vector2(210f, 52f), new Color(0.58f, 0.18f, 0.18f, 1f));
 
             t = go.transform;
         }
@@ -222,6 +264,15 @@ public static class IdleRgpMainHudSceneSetup
         if (t.Find("GoldText") == null)
             CreateUiTextChild(t, "GoldText", "Gold 0", 20, TextAnchor.MiddleLeft,
                 new Vector2(220f, 28f), new Vector2(120f, -30f), new Color(1f, 0.9f, 0.35f, 1f));
+        if (t.Find("CombatPowerText") == null)
+            CreateUiTextChild(t, "CombatPowerText", "전투력 0", 18, TextAnchor.MiddleLeft,
+                new Vector2(220f, 28f), new Vector2(120f, -60f), new Color(0.72f, 0.9f, 1f, 1f));
+        if (t.Find("ResetProgressButton") == null)
+            EnsurePanelActionButton(t, "ResetProgressButton", "기록 초기화",
+                new Vector2(16f, 14f), new Vector2(210f, 52f), new Color(0.58f, 0.18f, 0.18f, 1f));
+        Transform oldShopButton = t.Find("ShopButton");
+        if (oldShopButton != null)
+            Undo.DestroyObjectImmediate(oldShopButton.gameObject);
 
         return t;
     }
@@ -317,12 +368,14 @@ public static class IdleRgpMainHudSceneSetup
 
         Transform abilityPanel = EnsureAbilityUpgradePanel(hud, player);
         Transform skillPanel = EnsureSkillTabPanel(hud, player);
+        Transform equipmentPanel = EnsureEquipmentTabPanel(hud, player);
 
         CreateTab(row, "Btn_Ability", "능력치", new Vector2(-220f, 0f),
             abilityPanel != null ? abilityPanel.gameObject : null);
         CreateTab(row, "Btn_Skill", "스킬", new Vector2(0f, 0f),
             skillPanel != null ? skillPanel.gameObject : null);
-        CreateTab(row, "Btn_Equipment", "장비", new Vector2(220f, 0f), null);
+        CreateTab(row, "Btn_Equipment", "장비", new Vector2(220f, 0f),
+            equipmentPanel != null ? equipmentPanel.gameObject : null);
 
         WireHudTabToggleClick(row.Find("Btn_Ability")?.gameObject);
         WireHudTabToggleClick(row.Find("Btn_Skill")?.gameObject);
@@ -496,7 +549,7 @@ public static class IdleRgpMainHudSceneSetup
             var brt = btnGo.GetComponent<RectTransform>();
             brt.anchorMin = new Vector2(0.5f, 0.5f);
             brt.anchorMax = new Vector2(0.5f, 0.5f);
-            brt.sizeDelta = new Vector2(200f, 44f);
+            brt.sizeDelta = new Vector2(220f, 84f);
 
             GameObject lbl = new GameObject("Label", typeof(RectTransform));
             lbl.transform.SetParent(btnGo.transform, false);
@@ -632,6 +685,12 @@ public static class IdleRgpMainHudSceneSetup
 
         Text dBody = EnsurePanelText(left, "DetailBodyText", "", 16, TextAnchor.UpperLeft,
             new Vector2(16f, -100f), new Vector2(-16f, -20f));
+        Text costText = EnsurePanelText(left, "DetailCostText", "구매 비용: Gold 120", 16, TextAnchor.LowerLeft,
+            new Vector2(16f, -52f), new Vector2(-16f, -20f));
+        Button buyButton = EnsurePanelActionButton(left, "BuyButton", "구매 Gold 120",
+            new Vector2(16f, 16f), new Vector2(190f, 48f), new Color(0.18f, 0.48f, 0.18f, 1f));
+        Button equipButton = EnsurePanelActionButton(left, "EquipButton", "장착",
+            new Vector2(214f, 16f), new Vector2(148f, 48f), new Color(0.15f, 0.40f, 0.72f, 1f));
 
         Transform gridHolder = right.Find("SkillGridHolder");
         if (gridHolder == null)
@@ -661,38 +720,190 @@ public static class IdleRgpMainHudSceneSetup
         glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         glg.constraintCount = 4;
 
-        EnsureSkillGridSlot(gridHolder, 0, new Color(0.20f, 0.70f, 0.35f, 1f), false, "");
-        EnsureSkillGridSlot(gridHolder, 1, new Color(0.28f, 0.42f, 0.66f, 1f), true, "잠금");
+        EnsureSkillGridSlot(gridHolder, 0, Color.white, true, "잠금");
+        EnsureSkillGridSlot(gridHolder, 1, Color.white, true, "잠금");
 
-        for (int s = 2; s < 8; s++)
-            EnsureSkillGridSlot(gridHolder, s, new Color(0.30f, 0.30f, 0.34f, 1f), true, "미구현");
+        for (int s = 2; s < 20; s++)
+            EnsureSkillGridSlot(gridHolder, s, Color.white, true, "미구현");
 
-        System.Type healType = System.Type.GetType("PassiveHealingSkill, Assembly-CSharp");
-        if (healType != null)
+        System.Type loadoutType = System.Type.GetType("PlayerSkillLoadout, Assembly-CSharp");
+        Component loadoutCmp = null;
+        if (loadoutType != null)
         {
-            Component healCmp = player.GetComponent(healType);
-            if (healCmp == null)
-                healCmp = Undo.AddComponent(player, healType);
+            loadoutCmp = player.GetComponent(loadoutType);
+            if (loadoutCmp == null)
+                loadoutCmp = Undo.AddComponent(player, loadoutType);
 
-            using SerializedObject soHeal = new SerializedObject(healCmp);
-            SerializedProperty ph = soHeal.FindProperty("playerHealth");
-            if (ph != null)
-                ph.objectReferenceValue = player.GetComponent<PlayerHealth>();
-            soHeal.ApplyModifiedProperties();
+            using SerializedObject soLoadout = new SerializedObject(loadoutCmp);
+            SerializedProperty ctrlProp = soLoadout.FindProperty("playerController");
+            if (ctrlProp != null)
+                ctrlProp.objectReferenceValue = player.GetComponent<PlayerController>();
+            SerializedProperty prefabProp = soLoadout.FindProperty("bulletPrefab");
+            if (prefabProp != null)
+                prefabProp.objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/3.Prefab/Bullet.prefab");
+            SerializedProperty fxProp = soLoadout.FindProperty("iceBurstFxPrefab");
+            if (fxProp != null)
+                fxProp.objectReferenceValue = EnsureIceBurstFxPrefabAsset();
+            soLoadout.ApplyModifiedProperties();
         }
 
         Component ui = GetOrAddComponentByTypeName(panel.gameObject, "SkillTabPanelUI");
         if (ui != null)
         {
             using SerializedObject so = new SerializedObject(ui);
+            so.FindProperty("playerProgression").objectReferenceValue = player.GetComponent<PlayerProgression>();
+            so.FindProperty("playerSkillLoadout").objectReferenceValue = loadoutCmp;
             so.FindProperty("detailTitleText").objectReferenceValue = dTitle;
             so.FindProperty("detailBodyText").objectReferenceValue = dBody;
+            so.FindProperty("detailCostText").objectReferenceValue = costText;
+            so.FindProperty("buyButton").objectReferenceValue = buyButton;
+            so.FindProperty("equipButton").objectReferenceValue = equipButton;
             so.FindProperty("gridRoot").objectReferenceValue = gridHolder;
             so.ApplyModifiedProperties();
         }
 
         panel.gameObject.SetActive(false);
         return panel;
+    }
+
+    static Transform EnsureEquipmentTabPanel(Canvas hud, GameObject player)
+    {
+        Transform panel = hud.transform.Find("EquipmentTabPanel");
+        if (panel == null)
+        {
+            GameObject go = new GameObject("EquipmentTabPanel", typeof(RectTransform), typeof(Image));
+            Undo.RegisterCreatedObjectUndo(go, "EquipmentTabPanel");
+            go.transform.SetParent(hud.transform, false);
+            panel = go.transform;
+        }
+
+        RectTransform panelRt = panel.GetComponent<RectTransform>();
+        panelRt.anchorMin = new Vector2(0.1f, 0.18f);
+        panelRt.anchorMax = new Vector2(0.9f, 0.82f);
+        panelRt.offsetMin = Vector2.zero;
+        panelRt.offsetMax = Vector2.zero;
+        panelRt.pivot = new Vector2(0.5f, 0.5f);
+        panel.GetComponent<Image>().color = new Color(0.06f, 0.09f, 0.14f, 0.95f);
+
+        Transform left = EnsurePanelSection(panel, "EquipmentDetailSection", new Vector2(0f, 0f), new Vector2(0.42f, 1f));
+        Transform right = EnsurePanelSection(panel, "EquipmentGridSection", new Vector2(0.44f, 0f), new Vector2(1f, 1f));
+
+        EnsurePanelText(left, "EquipmentHeaderText", "장비", 26, TextAnchor.UpperLeft,
+            new Vector2(16f, -14f), new Vector2(-16f, -54f));
+
+        Text dTitle = EnsurePanelText(left, "DetailTitleText", "번개검", 22, TextAnchor.UpperLeft,
+            new Vector2(16f, -60f), new Vector2(-16f, -94f));
+        Text dBody = EnsurePanelText(left, "DetailBodyText",
+            "무작위 적에게 자동으로 번개 공격을 한다.\n\n전투력 증가량: +45\n구매 시 즉시 장착",
+            17, TextAnchor.UpperLeft,
+            new Vector2(16f, -112f), new Vector2(-16f, -110f));
+        dBody.lineSpacing = 1.15f;
+        Text costText = EnsurePanelText(left, "DetailCostText", "구매 비용: Gold 40", 16, TextAnchor.LowerLeft,
+            new Vector2(16f, -56f), new Vector2(-16f, -64f));
+        Button actionButton = EnsurePanelActionButton(left, "ActionButton", "구매 후 장착 Gold 40",
+            new Vector2(16f, 16f), new Vector2(368f, 48f), new Color(0.25f, 0.46f, 0.18f, 1f));
+
+        Transform gridHolder = right.Find("WeaponGridHolder");
+        if (gridHolder == null)
+        {
+            GameObject gh = new GameObject("WeaponGridHolder", typeof(RectTransform));
+            Undo.RegisterCreatedObjectUndo(gh, "WeaponGridHolder");
+            gh.transform.SetParent(right, false);
+            gridHolder = gh.transform;
+        }
+
+        RectTransform ghRt = gridHolder.GetComponent<RectTransform>();
+        ghRt.anchorMin = Vector2.zero;
+        ghRt.anchorMax = Vector2.one;
+        ghRt.offsetMin = new Vector2(8f, 8f);
+        ghRt.offsetMax = new Vector2(-8f, -8f);
+
+        GridLayoutGroup glg = gridHolder.GetComponent<GridLayoutGroup>();
+        if (glg == null)
+            glg = Undo.AddComponent<GridLayoutGroup>(gridHolder.gameObject);
+        glg.padding = new RectOffset(6, 6, 6, 6);
+        glg.spacing = new Vector2(8f, 8f);
+        glg.cellSize = new Vector2(104f, 96f);
+        glg.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        glg.startAxis = GridLayoutGroup.Axis.Horizontal;
+        glg.childAlignment = TextAnchor.UpperLeft;
+        glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        glg.constraintCount = 4;
+
+        EnsureWeaponGridSlot(gridHolder, 0, Color.white, true, "잠금");
+        EnsureWeaponGridSlot(gridHolder, 1, Color.white, true, "잠금");
+        for (int s = 2; s < 20; s++)
+            EnsureWeaponGridSlot(gridHolder, s, Color.white, true, "미구현");
+
+        System.Type weaponLoadoutType = System.Type.GetType("PlayerWeaponLoadout, Assembly-CSharp");
+        Component weaponLoadoutCmp = null;
+        if (weaponLoadoutType != null)
+        {
+            weaponLoadoutCmp = player.GetComponent(weaponLoadoutType);
+            if (weaponLoadoutCmp == null)
+                weaponLoadoutCmp = Undo.AddComponent(player, weaponLoadoutType);
+        }
+
+        Component ui = GetOrAddComponentByTypeName(panel.gameObject, "WeaponTabPanelUI");
+        if (ui != null)
+        {
+            using SerializedObject so = new SerializedObject(ui);
+            so.FindProperty("playerProgression").objectReferenceValue = player.GetComponent<PlayerProgression>();
+            so.FindProperty("playerWeaponLoadout").objectReferenceValue = weaponLoadoutCmp;
+            so.FindProperty("detailTitleText").objectReferenceValue = dTitle;
+            so.FindProperty("detailBodyText").objectReferenceValue = dBody;
+            so.FindProperty("detailCostText").objectReferenceValue = costText;
+            so.FindProperty("actionButton").objectReferenceValue = actionButton;
+            so.FindProperty("gridRoot").objectReferenceValue = gridHolder;
+            so.ApplyModifiedProperties();
+        }
+
+        panel.gameObject.SetActive(false);
+        return panel;
+    }
+
+    static void EnsureWeaponGridSlot(
+        Transform gridHolder,
+        int index,
+        Color iconColor,
+        bool showLockOverlay,
+        string overlayCenterLabel)
+    {
+        string slotName = $"WeaponSlot_{index}";
+        Transform slot = gridHolder.Find(slotName);
+        GameObject slotGo;
+        if (slot == null)
+        {
+            slotGo = new GameObject(slotName, typeof(RectTransform), typeof(Image), typeof(Button));
+            Undo.RegisterCreatedObjectUndo(slotGo, slotName);
+            slotGo.transform.SetParent(gridHolder, false);
+        }
+        else
+        {
+            slotGo = slot.gameObject;
+        }
+
+        Image bg = slotGo.GetComponent<Image>();
+        if (bg == null)
+            bg = Undo.AddComponent<Image>(slotGo);
+        bg.color = new Color(0.11f, 0.13f, 0.18f, 0.92f);
+        bg.raycastTarget = true;
+
+        Button bt = slotGo.GetComponent<Button>();
+        if (bt == null)
+            bt = Undo.AddComponent<Button>(slotGo);
+        bt.targetGraphic = bg;
+
+        Outline ol = slotGo.GetComponent<Outline>();
+        if (ol == null)
+            ol = Undo.AddComponent<Outline>(slotGo);
+        ol.effectColor = Color.white;
+        ol.effectDistance = new Vector2(2f, -2f);
+        ol.useGraphicAlpha = true;
+        ol.enabled = index == 0;
+
+        EnsureSkillSlotIcon(slotGo.transform, iconColor);
+        EnsureSkillSlotLockOverlay(slotGo.transform, showLockOverlay, overlayCenterLabel);
     }
 
     static void EnsureSkillGridSlot(
@@ -762,14 +973,17 @@ public static class IdleRgpMainHudSceneSetup
         irt.anchorMin = new Vector2(0.5f, 0.5f);
         irt.anchorMax = new Vector2(0.5f, 0.5f);
         irt.pivot = new Vector2(0.5f, 0.5f);
-        irt.sizeDelta = new Vector2(56f, 56f);
+        irt.sizeDelta = new Vector2(94f, 94f);
         irt.anchoredPosition = Vector2.zero;
 
         Image icon = iconTf.GetComponent<Image>();
-        icon.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+        if (icon.sprite == null)
+            icon.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
         icon.type = Image.Type.Sliced;
         icon.preserveAspect = true;
-        icon.color = iconColor;
+        // 이미 사용자가 아이콘 이미지를 넣어둔 경우 색 틴트 덮어쓰지 않음
+        if (icon.sprite == null || icon.sprite == AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd"))
+            icon.color = iconColor;
         icon.raycastTarget = false;
     }
 
@@ -827,6 +1041,150 @@ public static class IdleRgpMainHudSceneSetup
         lt.raycastTarget = false;
 
         overlayGo.SetActive(visible);
+    }
+
+    static Button EnsurePanelActionButton(
+        Transform parent,
+        string name,
+        string label,
+        Vector2 anchoredPos,
+        Vector2 size,
+        Color bgColor)
+    {
+        Transform btnTf = parent.Find(name);
+        if (btnTf == null)
+        {
+            GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            Undo.RegisterCreatedObjectUndo(go, name);
+            go.transform.SetParent(parent, false);
+            btnTf = go.transform;
+        }
+
+        RectTransform rt = btnTf.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 0f);
+        rt.anchorMax = new Vector2(0f, 0f);
+        rt.pivot = new Vector2(0f, 0f);
+        rt.anchoredPosition = anchoredPos;
+        rt.sizeDelta = new Vector2(Mathf.Max(160f, size.x), Mathf.Max(72f, size.y));
+
+        Image img = btnTf.GetComponent<Image>();
+        img.color = bgColor;
+
+        Button btn = btnTf.GetComponent<Button>();
+        btn.targetGraphic = img;
+
+        Transform lblTf = btnTf.Find("Label");
+        if (lblTf == null)
+        {
+            GameObject lblGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            Undo.RegisterCreatedObjectUndo(lblGo, "Label");
+            lblGo.transform.SetParent(btnTf, false);
+            lblTf = lblGo.transform;
+        }
+
+        RectTransform lrt = lblTf.GetComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero;
+        lrt.offsetMax = Vector2.zero;
+
+        Text txt = lblTf.GetComponent<Text>();
+        txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        txt.fontSize = 18;
+        txt.alignment = TextAnchor.MiddleCenter;
+        txt.color = Color.white;
+        txt.text = label;
+        txt.raycastTarget = false;
+
+        return btn;
+    }
+
+    static GameObject EnsureIceBurstFxPrefabAsset()
+    {
+        const string fxPath = "Assets/3.Prefab/IceBurstFx.prefab";
+        const string matPath = "Assets/3.Prefab/IceBurstFx_Mat.mat";
+        GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(fxPath);
+
+        Material fxMat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+        if (fxMat == null)
+        {
+            Shader shader =
+                Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default") ??
+                Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
+                Shader.Find("Particles/Standard Unlit") ??
+                Shader.Find("Sprites/Default");
+
+            if (shader != null)
+            {
+                fxMat = new Material(shader);
+                AssetDatabase.CreateAsset(fxMat, matPath);
+            }
+        }
+
+        if (existing != null)
+        {
+            ParticleSystemRenderer existingRenderer = existing.GetComponent<ParticleSystemRenderer>();
+            if (existingRenderer != null && fxMat != null)
+            {
+                existingRenderer.sharedMaterial = fxMat;
+                EditorUtility.SetDirty(existingRenderer);
+                PrefabUtility.SavePrefabAsset(existing);
+                AssetDatabase.SaveAssets();
+            }
+            return existing;
+        }
+
+        GameObject temp = new GameObject("IceBurstFx");
+        ParticleSystem ps = temp.AddComponent<ParticleSystem>();
+        ParticleSystem.MainModule main = ps.main;
+        main.loop = false;
+        main.duration = 0.5f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.2f, 0.45f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(1.2f, 3.6f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.18f);
+        main.startColor = new ParticleSystem.MinMaxGradient(
+            new Color(0.55f, 0.9f, 1f, 0.95f),
+            new Color(0.2f, 0.6f, 1f, 0.8f));
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.gravityModifier = 0f;
+        main.maxParticles = 80;
+
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 40) });
+
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.12f;
+
+        ParticleSystem.ColorOverLifetimeModule colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient g = new Gradient();
+        g.SetKeys(
+            new[] {
+                new GradientColorKey(new Color(0.65f, 0.95f, 1f), 0f),
+                new GradientColorKey(new Color(0.3f, 0.7f, 1f), 1f)
+            },
+            new[] {
+                new GradientAlphaKey(0.95f, 0f),
+                new GradientAlphaKey(0f, 1f)
+            });
+        colorOverLifetime.color = g;
+
+        ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = ps.sizeOverLifetime;
+        sizeOverLifetime.enabled = true;
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(
+            1f, AnimationCurve.EaseInOut(0f, 0.35f, 1f, 1f));
+
+        ParticleSystemRenderer renderer = temp.GetComponent<ParticleSystemRenderer>();
+        if (fxMat != null)
+            renderer.sharedMaterial = fxMat;
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(temp, fxPath);
+        Undo.DestroyObjectImmediate(temp);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        return prefab;
     }
 
     static void WireHudTabToggleClick(GameObject tabButtonGo)
@@ -982,6 +1340,17 @@ public static class IdleRgpMainHudSceneSetup
 
     static void EnsureOfflineRewardRoot(Canvas hud, GameObject player)
     {
+        Component rewardMgr = GetOrAddComponentByTypeName(player, "OfflineRewardManager");
+        Component popupUi = GetOrAddComponentByTypeName(player, "OfflineRewardPopupUI");
+
+        if (rewardMgr != null)
+        {
+            using SerializedObject soMgr = new SerializedObject(rewardMgr);
+            SerializedProperty p = soMgr.FindProperty("enableOfflineRewards");
+            if (p != null) p.boolValue = true;
+            soMgr.ApplyModifiedProperties();
+        }
+
         Transform popup = hud.transform.Find("OfflineRewardPopup");
         Image backdrop;
         Text body;
@@ -1026,12 +1395,11 @@ public static class IdleRgpMainHudSceneSetup
             body = tBody != null ? tBody.GetComponent<Text>() : popup.GetComponentInChildren<Text>();
         }
 
-        OfflineRewardPopupUI pu = player.GetComponent<OfflineRewardPopupUI>();
-        if (pu != null && backdrop != null && body != null)
+        if (popupUi != null && backdrop != null && body != null)
         {
-            using SerializedObject sop = new SerializedObject(pu);
+            using SerializedObject sop = new SerializedObject(popupUi);
             sop.FindProperty("offlineRewardManager").objectReferenceValue =
-                player.GetComponent<OfflineRewardManager>();
+                rewardMgr;
             sop.FindProperty("popupBackground").objectReferenceValue = backdrop;
             sop.FindProperty("popupText").objectReferenceValue = body;
             sop.ApplyModifiedProperties();
@@ -1056,28 +1424,28 @@ public static class IdleRgpMainHudSceneSetup
         rootRt.anchoredPosition = new Vector2(-18f, 18f);
         rootRt.sizeDelta = new Vector2(330f, 120f);
 
-        Transform slot1 = EnsureSkillSlot(root, "SkillSlot_1", new Vector2(-220f, 0f), true);
-        EnsureSkillSlot(root, "SkillSlot_2", new Vector2(-110f, 0f), false);
-        EnsureSkillSlot(root, "SkillSlot_3", new Vector2(0f, 0f), false);
+        Transform slot1 = EnsureSkillSlot(root, "SkillSlot_1", new Vector2(-220f, 0f), false);
+        Transform slot2 = EnsureSkillSlot(root, "SkillSlot_2", new Vector2(-110f, 0f), false);
+        Transform slot3 = EnsureSkillSlot(root, "SkillSlot_3", new Vector2(0f, 0f), false);
 
-        AutoLightningStrikeSkill lightning = player.GetComponent<AutoLightningStrikeSkill>();
-        if (lightning == null)
-            lightning = Undo.AddComponent<AutoLightningStrikeSkill>(player);
+        System.Type loadoutType = System.Type.GetType("PlayerSkillLoadout, Assembly-CSharp");
+        Component loadoutCmp = null;
+        if (loadoutType != null)
+        {
+            loadoutCmp = player.GetComponent(loadoutType);
+            if (loadoutCmp == null)
+                loadoutCmp = Undo.AddComponent(player, loadoutType);
+        }
 
         Component quickSlotsUi = GetOrAddComponentByTypeName(root.gameObject, "SkillQuickSlotsUI");
         if (quickSlotsUi == null)
             return;
 
         using SerializedObject so = new SerializedObject(quickSlotsUi);
-        so.FindProperty("lightningSkill").objectReferenceValue = lightning;
-        so.FindProperty("slot1Icon").objectReferenceValue =
-            slot1.Find("Icon")?.GetComponent<Image>();
-        so.FindProperty("slot1CooldownFillImage").objectReferenceValue =
-            slot1.Find("Icon")?.GetComponent<Image>();
-        so.FindProperty("slot1CooldownMask").objectReferenceValue =
-            slot1.Find("CooldownMask")?.GetComponent<Image>();
-        so.FindProperty("slot1CooldownText").objectReferenceValue =
-            slot1.Find("CooldownText")?.GetComponent<Text>();
+        so.FindProperty("playerSkillLoadout").objectReferenceValue = loadoutCmp;
+        so.FindProperty("slot1Root").objectReferenceValue = slot1;
+        so.FindProperty("slot2Root").objectReferenceValue = slot2;
+        so.FindProperty("slot3Root").objectReferenceValue = slot3;
         so.ApplyModifiedProperties();
     }
 
@@ -1132,14 +1500,16 @@ public static class IdleRgpMainHudSceneSetup
             irt.anchorMin = new Vector2(0.5f, 0.5f);
             irt.anchorMax = new Vector2(0.5f, 0.5f);
             irt.pivot = new Vector2(0.5f, 0.5f);
-            irt.sizeDelta = new Vector2(74f, 74f);
+            irt.sizeDelta = new Vector2(86f, 86f);
             irt.anchoredPosition = Vector2.zero;
         }
 
         Image iconImg = icon.GetComponent<Image>();
-        iconImg.color = isLightningSlot ? new Color(1f, 0.84f, 0.22f, 1f) : new Color(0.4f, 0.4f, 0.45f, 1f);
-        if (!isLightningSlot)
-            iconImg.color = new Color(0f, 0f, 0f, 0f);
+        // 유저가 아이콘 스프라이트를 넣어둔 경우 기존 색을 유지
+        if (iconImg.sprite == null)
+        {
+            iconImg.color = isLightningSlot ? new Color(1f, 0.84f, 0.22f, 1f) : new Color(0f, 0f, 0f, 0f);
+        }
 
         Transform mask = slotGo.transform.Find("CooldownMask");
         if (mask == null)

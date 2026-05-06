@@ -58,8 +58,41 @@ MonoBehaviour:
     rewardGold: 8
     rewardExperience: 11
   - level: 5
+    sprite: {fileID: -3112195067975180470, guid: afb7602f2ec99fd4ba19c0fd8a9641fb, type: 3}
+    animatorController: {fileID: 9100000, guid: 24923be883e51a349afc760a56048b44, type: 2}
+    maxHealth: 36
+    moveSpeed: 1.85
+    attackDistance: 0.95
+    contactDamage: 0.22
+    attacksPerSecond: 1.2
+    deathReturnDelay: 0.75
+    rewardGold: 12
+    rewardExperience: 16
+  - level: 5
     sprite: {fileID: -3252961087705743626, guid: 9f27c47f2f185d94bb668c6c27a4ded3, type: 3}
     animatorController: {fileID: 9100000, guid: 6bdfe8af26bcfec4f92ea5a33b2a91f7, type: 2}
+    maxHealth: 36
+    moveSpeed: 1.85
+    attackDistance: 0.95
+    contactDamage: 0.22
+    attacksPerSecond: 1.2
+    deathReturnDelay: 0.75
+    rewardGold: 12
+    rewardExperience: 16
+  - level: 5
+    sprite: {fileID: -3112195067975180470, guid: afb7602f2ec99fd4ba19c0fd8a9641fb, type: 3}
+    animatorController: {fileID: 9100000, guid: 24923be883e51a349afc760a56048b44, type: 2}
+    maxHealth: 36
+    moveSpeed: 1.85
+    attackDistance: 0.95
+    contactDamage: 0.22
+    attacksPerSecond: 1.2
+    deathReturnDelay: 0.75
+    rewardGold: 12
+    rewardExperience: 16
+  - level: 5
+    sprite: {fileID: -3112195067975180470, guid: afb7602f2ec99fd4ba19c0fd8a9641fb, type: 3}
+    animatorController: {fileID: 9100000, guid: 24923be883e51a349afc760a56048b44, type: 2}
     maxHealth: 36
     moveSpeed: 1.85
     attackDistance: 0.95

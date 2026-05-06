@@ -39,6 +39,14 @@ public class HudTabPlaceholder : MonoBehaviour
             Transform found = canvas.transform.Find("AbilityUpgradePanel");
             if (found != null)
                 targetPanel = found.gameObject;
+            return;
+        }
+
+        if (buttonName.Contains("Equipment") || buttonName.Contains("Weapon"))
+        {
+            Transform found = canvas.transform.Find("EquipmentTabPanel");
+            if (found != null)
+                targetPanel = found.gameObject;
         }
     }
 }

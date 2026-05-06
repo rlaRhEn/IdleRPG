@@ -20,6 +20,7 @@ public class MonsterController : MonoBehaviour
     private MonsterMeleeAttack meleeAttack;
     private PlayerHealth targetHealth;
     private HashSet<string> animatorParams = new HashSet<string>();
+    private string fallbackAttackStateName;
     private Coroutine deathRoutine;
 
     void Awake()
@@ -91,7 +92,7 @@ public class MonsterController : MonoBehaviour
             {
                 meleeAttack.ApplyAttackAnimationSpeed(cachedAnimator);
                 if (meleeAttack.BeginAttack(targetHealth))
-                    SetTrigger(attackTriggerParam);
+                    PlayAttackAnimation();
             }
             return;
         }
@@ -151,11 +152,27 @@ public class MonsterController : MonoBehaviour
     void CacheAnimatorParams()
     {
         animatorParams.Clear();
+        fallbackAttackStateName = null;
         if (cachedAnimator == null) return;
 
         AnimatorControllerParameter[] parameters = cachedAnimator.parameters;
         for (int i = 0; i < parameters.Length; i++)
             animatorParams.Add(parameters[i].name);
+
+        RuntimeAnimatorController rac = cachedAnimator.runtimeAnimatorController;
+        if (rac == null || rac.animationClips == null) return;
+
+        // 트리거 파라미터가 없는 컨트롤러에서도 공격 클립을 직접 재생할 수 있게 백업 경로를 잡습니다.
+        for (int i = 0; i < rac.animationClips.Length; i++)
+        {
+            AnimationClip clip = rac.animationClips[i];
+            if (clip == null || string.IsNullOrEmpty(clip.name)) continue;
+            if (clip.name.ToLower().Contains("attack"))
+            {
+                fallbackAttackStateName = clip.name;
+                break;
+            }
+        }
     }
 
     void SetRun(bool isRunning)
@@ -169,6 +186,20 @@ public class MonsterController : MonoBehaviour
         if (cachedAnimator == null || string.IsNullOrEmpty(triggerName)) return;
         if (!animatorParams.Contains(triggerName)) return;
         cachedAnimator.SetTrigger(triggerName);
+    }
+
+    void PlayAttackAnimation()
+    {
+        if (cachedAnimator == null) return;
+
+        if (!string.IsNullOrEmpty(attackTriggerParam) && animatorParams.Contains(attackTriggerParam))
+        {
+            cachedAnimator.SetTrigger(attackTriggerParam);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(fallbackAttackStateName))
+            cachedAnimator.Play(fallbackAttackStateName, 0, 0f);
     }
 
     public void SetTarget(Transform newTarget)

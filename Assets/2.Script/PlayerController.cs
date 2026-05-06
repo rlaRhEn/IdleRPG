@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
-public enum PlayerState{Idle, Chase, Attack}
+public enum PlayerState { Idle, Chase, Attack, Skill }
 public class PlayerController : MonoBehaviour
 {
     [SerializeField] private float moveSpeed = 5f;
@@ -18,6 +18,7 @@ public class PlayerController : MonoBehaviour
     Animator ani;
     Rigidbody2D rb;
     PlayerState currentState = PlayerState.Idle;
+    float skillStateRemain;
     void Awake()
     {
         ani = GetComponent<Animator>();
@@ -52,14 +53,46 @@ public class PlayerController : MonoBehaviour
             case PlayerState.Attack:
                 AttackEnemy();
                 break;
+            case PlayerState.Skill:
+                UpdateSkillState();
+                break;
             }
 
+    }
+
+    void UpdateSkillState()
+    {
+        rb.linearVelocity = Vector2.zero;
+        skillStateRemain -= Time.fixedDeltaTime;
+        if (skillStateRemain <= 0f)
+        {
+            skillStateRemain = 0f;
+            ChangeState(PlayerState.Idle);
+        }
     }
     void ChangeState(PlayerState state)
     {
         if(currentState == state) return;
         Debug.Log($"CurrentState:  {state}");
         currentState = state;
+    }
+
+    public void BeginSkillCast(float lockDuration)
+    {
+        if (playerHealth != null && playerHealth.IsDead) return;
+
+        skillStateRemain = Mathf.Max(0.05f, lockDuration);
+        rb.linearVelocity = Vector2.zero;
+        ani.SetBool("DoRun", false);
+        TryPlaySkillAnimation();
+        ChangeState(PlayerState.Skill);
+    }
+
+    void TryPlaySkillAnimation()
+    {
+        // Animator 파라미터 이름을 모르는 경우에도 상태 이름으로 재생 시도
+        ani.SetTrigger("DoAttack");
+        ani.Play("SitDownToFire", 0, 0f);
     }
 
     void UpdateFlip()
