@@ -1,0 +1,234 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// 몬스터 AI: 플레이어와의 거리에 따라 이동·정지, 공격 거리에서 <see cref="MonsterMeleeAttack"/>으로 공격 애니·타격, 사망 시 연출 후 처리 위임.
+/// </summary>
+public class MonsterController : MonoBehaviour
+{
+    [SerializeField] private Transform target;
+    [SerializeField] private float moveSpeed = 2.2f;
+    [SerializeField] private float attackDistance = 0.8f;
+    [SerializeField] private float detectDistance = 20f;
+    [SerializeField] private float deathReturnDelay = 0.8f;
+    [SerializeField] private string runBoolParam = "DoRun";
+    [SerializeField] private string attackTriggerParam = "DoAttack";
+    [SerializeField] private string dieTriggerParam = "DoDie";
+
+    private Animator cachedAnimator;
+    private Rigidbody2D cachedRigidbody;
+    private SpriteRenderer cachedSpriteRenderer;
+    private MonsterHealth monsterHealth;
+    private MonsterMeleeAttack meleeAttack;
+    private PlayerHealth targetHealth;
+    private HashSet<string> animatorParams = new HashSet<string>();
+    private string fallbackAttackStateName;
+    private Coroutine deathRoutine;
+
+    void Awake()
+    {
+        cachedAnimator = GetComponent<Animator>();
+        cachedRigidbody = GetComponent<Rigidbody2D>();
+        cachedSpriteRenderer = GetComponent<SpriteRenderer>();
+        monsterHealth = GetComponent<MonsterHealth>();
+        meleeAttack = GetComponent<MonsterMeleeAttack>();
+
+        if (target == null)
+        {
+            GameObject playerObject = GameObject.FindWithTag("Player");
+            if (playerObject == null) playerObject = GameObject.Find("Player");
+            if (playerObject != null) target = playerObject.transform;
+        }
+
+        if (target != null)
+            targetHealth = target.GetComponent<PlayerHealth>();
+
+        CacheAnimatorParams();
+    }
+
+    void OnEnable()
+    {
+        if (cachedRigidbody != null)
+            cachedRigidbody.linearVelocity = Vector2.zero;
+
+        if (monsterHealth != null)
+        {
+            monsterHealth.SetAutoFinalizeDeath(false);
+            monsterHealth.Died += OnDied;
+        }
+    }
+
+    void OnDisable()
+    {
+        if (monsterHealth != null)
+            monsterHealth.Died -= OnDied;
+
+        if (deathRoutine != null)
+        {
+            StopCoroutine(deathRoutine);
+            deathRoutine = null;
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (monsterHealth != null && monsterHealth.IsDead) return;
+        if (!IsTargetValid())
+        {
+            SetRun(false);
+            if (cachedRigidbody != null)
+                cachedRigidbody.linearVelocity = Vector2.zero;
+            return;
+        }
+
+        Vector2 toTarget = (Vector2)target.position - cachedRigidbody.position;
+        float distance = toTarget.magnitude;
+        UpdateFlipByTargetX();
+
+        if (distance <= attackDistance)
+        {
+            SetRun(false);
+            cachedRigidbody.linearVelocity = Vector2.zero;
+
+            if (meleeAttack != null)
+            {
+                meleeAttack.ApplyAttackAnimationSpeed(cachedAnimator);
+                if (meleeAttack.BeginAttack(targetHealth))
+                    PlayAttackAnimation();
+            }
+            return;
+        }
+
+        if (distance <= detectDistance)
+        {
+            if (meleeAttack != null)
+                meleeAttack.ResetAnimationSpeed(cachedAnimator);
+
+            SetRun(true);
+            Vector2 direction = toTarget.normalized;
+            cachedRigidbody.linearVelocity = direction * moveSpeed;
+            return;
+        }
+
+        if (meleeAttack != null)
+            meleeAttack.ResetAnimationSpeed(cachedAnimator);
+        SetRun(false);
+        cachedRigidbody.linearVelocity = Vector2.zero;
+    }
+
+    void OnDied()
+    {
+        SetRun(false);
+        SetTrigger(dieTriggerParam);
+
+        if (deathRoutine != null)
+            StopCoroutine(deathRoutine);
+
+        deathRoutine = StartCoroutine(ReturnAfterDeathAnimation());
+    }
+
+    IEnumerator ReturnAfterDeathAnimation()
+    {
+        yield return new WaitForSeconds(deathReturnDelay);
+        if (monsterHealth != null)
+            monsterHealth.FinalizeDeath();
+    }
+
+    bool IsTargetValid()
+    {
+        if (target == null || !target.gameObject.activeInHierarchy) return false;
+        if (targetHealth != null && targetHealth.IsDead) return false;
+        if (cachedRigidbody == null) return false;
+        return true;
+    }
+
+    void UpdateFlipByTargetX()
+    {
+        if (cachedSpriteRenderer == null || target == null) return;
+
+        float dx = target.position.x - transform.position.x;
+        if (Mathf.Abs(dx) < 0.0001f) return;
+        cachedSpriteRenderer.flipX = dx < 0f;
+    }
+
+    void CacheAnimatorParams()
+    {
+        animatorParams.Clear();
+        fallbackAttackStateName = null;
+        if (cachedAnimator == null) return;
+
+        AnimatorControllerParameter[] parameters = cachedAnimator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+            animatorParams.Add(parameters[i].name);
+
+        RuntimeAnimatorController rac = cachedAnimator.runtimeAnimatorController;
+        if (rac == null || rac.animationClips == null) return;
+
+        // 트리거 파라미터가 없는 컨트롤러에서도 공격 클립을 직접 재생할 수 있게 백업 경로를 잡습니다.
+        for (int i = 0; i < rac.animationClips.Length; i++)
+        {
+            AnimationClip clip = rac.animationClips[i];
+            if (clip == null || string.IsNullOrEmpty(clip.name)) continue;
+            if (clip.name.ToLower().Contains("attack"))
+            {
+                fallbackAttackStateName = clip.name;
+                break;
+            }
+        }
+    }
+
+    void SetRun(bool isRunning)
+    {
+        if (cachedAnimator == null || !animatorParams.Contains(runBoolParam)) return;
+        cachedAnimator.SetBool(runBoolParam, isRunning);
+    }
+
+    void SetTrigger(string triggerName)
+    {
+        if (cachedAnimator == null || string.IsNullOrEmpty(triggerName)) return;
+        if (!animatorParams.Contains(triggerName)) return;
+        cachedAnimator.SetTrigger(triggerName);
+    }
+
+    void PlayAttackAnimation()
+    {
+        if (cachedAnimator == null) return;
+
+        if (!string.IsNullOrEmpty(attackTriggerParam) && animatorParams.Contains(attackTriggerParam))
+        {
+            cachedAnimator.SetTrigger(attackTriggerParam);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(fallbackAttackStateName))
+            cachedAnimator.Play(fallbackAttackStateName, 0, 0f);
+    }
+
+    public void SetTarget(Transform newTarget)
+    {
+        target = newTarget;
+        targetHealth = target != null ? target.GetComponent<PlayerHealth>() : null;
+    }
+
+    public void SetMoveSpeed(float newMoveSpeed)
+    {
+        moveSpeed = Mathf.Max(0.01f, newMoveSpeed);
+    }
+
+    public void SetAttackDistance(float newAttackDistance)
+    {
+        attackDistance = Mathf.Max(0.05f, newAttackDistance);
+    }
+
+    public void SetDeathReturnDelay(float newDelay)
+    {
+        deathReturnDelay = Mathf.Max(0.01f, newDelay);
+    }
+
+    public void RefreshAnimatorCache()
+    {
+        CacheAnimatorParams();
+    }
+}
+
