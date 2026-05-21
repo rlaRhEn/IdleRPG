@@ -107,6 +107,9 @@ public static class IdleRgpMainHudSceneSetup
             sto.ApplyModifiedProperties();
         }
 
+        Transform settingsPanel = EnsureSettingsPanel(hud);
+        EnsureTopRightSettingsButton(hud, settingsPanel);
+
         EnsureOfflineRewardRoot(hud, player);
         EnsureBottomRightSkillSlots(hud, player);
         EnsureSafeAreaAdapter(hud);
@@ -177,6 +180,8 @@ public static class IdleRgpMainHudSceneSetup
         using SerializedObject so = new SerializedObject(adapter);
         so.FindProperty("hudCanvas").objectReferenceValue = hud;
         so.FindProperty("topLeftHud").objectReferenceValue = hud.transform.Find("TopLeft_ProfileHud")?.GetComponent<RectTransform>();
+        so.FindProperty("topRightSettingsButton").objectReferenceValue =
+            hud.transform.Find("TopRight_SettingsButton")?.GetComponent<RectTransform>();
         so.FindProperty("bottomCenterHud").objectReferenceValue = hud.transform.Find("BottomCenter_Hud")?.GetComponent<RectTransform>();
         so.FindProperty("bottomRightSkillSlots").objectReferenceValue = hud.transform.Find("BottomRight_SkillSlots")?.GetComponent<RectTransform>();
         so.ApplyModifiedProperties();
@@ -282,9 +287,13 @@ public static class IdleRgpMainHudSceneSetup
         Transform bottomRoot,
         Transform topLeftRoot)
     {
+        Color hpFillColor = new Color(0.9f, 0.22f, 0.22f, 1f);
         Transform hp = bottomRoot.Find("HealthSlider");
         if (hp != null)
+        {
+            SetSliderFillColor(hp, hpFillColor);
             return hp;
+        }
 
         if (topLeftRoot != null)
         {
@@ -296,15 +305,28 @@ public static class IdleRgpMainHudSceneSetup
                 var ht = topLeftRoot.Find("HealthText");
                 if (ht != null)
                     MoveTextLabel(ht, bottomRoot, new Vector2(560f, 22f), new Vector2(0f, 132f));
-                return bottomRoot.Find("HealthSlider");
+                Transform movedHp = bottomRoot.Find("HealthSlider");
+                if (movedHp != null)
+                    SetSliderFillColor(movedHp, hpFillColor);
+                return movedHp;
             }
         }
 
-        Slider s = BuildHudSlider(bottomRoot, "HealthSlider", new Color(0.25f, 0.85f, 0.3f, 1f));
+        Slider s = BuildHudSlider(bottomRoot, "HealthSlider", hpFillColor);
         LayoutHorizontalBar(s.GetComponent<RectTransform>(), 560f, 24f, new Vector2(0f, 108f));
+        SetSliderFillColor(s.transform, hpFillColor);
         CreateUiTextChild(bottomRoot, "HealthText", "HP 10/10", 17, TextAnchor.MiddleCenter,
             new Vector2(560f, 22f), new Vector2(0f, 132f), Color.white);
         return s.transform;
+    }
+
+    static void SetSliderFillColor(Transform sliderRoot, Color fillColor)
+    {
+        if (sliderRoot == null) return;
+        Transform fill = sliderRoot.Find("Fill Area/Fill");
+        Image fillImg = fill != null ? fill.GetComponent<Image>() : null;
+        if (fillImg != null)
+            fillImg.color = fillColor;
     }
 
     static Transform EnsureMana(Transform bottomRoot, Transform hpSliderTf)
@@ -860,6 +882,251 @@ public static class IdleRgpMainHudSceneSetup
 
         panel.gameObject.SetActive(false);
         return panel;
+    }
+
+    static Transform EnsureSettingsPanel(Canvas hud)
+    {
+        Transform panel = hud.transform.Find("SettingsPanel");
+        if (panel == null)
+        {
+            GameObject go = new GameObject("SettingsPanel", typeof(RectTransform), typeof(Image));
+            Undo.RegisterCreatedObjectUndo(go, "SettingsPanel");
+            go.transform.SetParent(hud.transform, false);
+            panel = go.transform;
+        }
+
+        RectTransform panelRt = panel.GetComponent<RectTransform>();
+        panelRt.anchorMin = new Vector2(0.12f, 0.22f);
+        panelRt.anchorMax = new Vector2(0.88f, 0.78f);
+        panelRt.offsetMin = Vector2.zero;
+        panelRt.offsetMax = Vector2.zero;
+        panelRt.pivot = new Vector2(0.5f, 0.5f);
+        panel.GetComponent<Image>().color = new Color(0.06f, 0.09f, 0.14f, 0.96f);
+
+        Transform content = EnsurePanelSection(panel, "SettingsContentSection", new Vector2(0f, 0f), new Vector2(1f, 1f));
+
+        EnsurePanelText(content, "SettingsHeaderText", "설정", 28, TextAnchor.UpperLeft,
+            new Vector2(20f, -20f), new Vector2(-120f, -64f));
+
+        Text infoText = EnsurePanelText(content, "SettingsInfoText",
+            "게임 설정\n\n· 사운드 (준비 중)\n· 알림 (준비 중)\n· 언어 (준비 중)",
+            20, TextAnchor.UpperLeft,
+            new Vector2(20f, -80f), new Vector2(-20f, -24f));
+        infoText.lineSpacing = 1.2f;
+
+        Button closeButton = EnsureTopAnchoredPanelButton(panel, "SettingsCloseButton", "닫기",
+            new Vector2(-16f, -16f), new Vector2(96f, 48f), new Color(0.28f, 0.32f, 0.4f, 1f));
+
+        Component ui = GetOrAddComponentByTypeName(panel.gameObject, "SettingsPanelUI");
+        if (ui != null)
+        {
+            using SerializedObject so = new SerializedObject(ui);
+            so.FindProperty("panelRoot").objectReferenceValue = panel.gameObject;
+            so.FindProperty("closeButton").objectReferenceValue = closeButton;
+            so.ApplyModifiedProperties();
+        }
+
+        panel.gameObject.SetActive(false);
+        return panel;
+    }
+
+    static Button EnsureTopAnchoredPanelButton(
+        Transform parent,
+        string name,
+        string label,
+        Vector2 anchoredPosition,
+        Vector2 size,
+        Color bgColor)
+    {
+        Transform btnTf = parent.Find(name);
+        if (btnTf == null)
+        {
+            GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            Undo.RegisterCreatedObjectUndo(go, name);
+            go.transform.SetParent(parent, false);
+            btnTf = go.transform;
+        }
+
+        RectTransform rt = btnTf.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(1f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.anchoredPosition = anchoredPosition;
+        rt.sizeDelta = size;
+
+        Image img = btnTf.GetComponent<Image>();
+        img.color = bgColor;
+
+        Button btn = btnTf.GetComponent<Button>();
+        btn.targetGraphic = img;
+
+        Transform lblTf = btnTf.Find("Label");
+        if (lblTf == null)
+        {
+            GameObject lblGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            Undo.RegisterCreatedObjectUndo(lblGo, "Label");
+            lblGo.transform.SetParent(btnTf, false);
+            lblTf = lblGo.transform;
+        }
+
+        RectTransform lrt = lblTf.GetComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero;
+        lrt.offsetMax = Vector2.zero;
+
+        Text txt = lblTf.GetComponent<Text>();
+        txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        txt.fontSize = 18;
+        txt.alignment = TextAnchor.MiddleCenter;
+        txt.color = Color.white;
+        txt.text = label;
+        txt.raycastTarget = false;
+
+        return btn;
+    }
+
+    static Transform EnsureTopRightSettingsButton(Canvas hud, Transform settingsPanel)
+    {
+        Transform root = hud.transform.Find("TopRight_SettingsButton");
+        if (root == null)
+        {
+            GameObject rootGo = new GameObject("TopRight_SettingsButton", typeof(RectTransform));
+            Undo.RegisterCreatedObjectUndo(rootGo, "TopRight_SettingsButton");
+            rootGo.transform.SetParent(hud.transform, false);
+            root = rootGo.transform;
+        }
+
+        RectTransform rootRt = root.GetComponent<RectTransform>();
+        rootRt.anchorMin = new Vector2(1f, 1f);
+        rootRt.anchorMax = new Vector2(1f, 1f);
+        rootRt.pivot = new Vector2(1f, 1f);
+        rootRt.anchoredPosition = new Vector2(-12f, -12f);
+        rootRt.sizeDelta = new Vector2(72f, 72f);
+
+        Transform btnTf = root.Find("Btn_Settings");
+        GameObject btnGo;
+        if (btnTf != null)
+            btnGo = btnTf.gameObject;
+        else
+        {
+            btnGo = new GameObject("Btn_Settings", typeof(RectTransform), typeof(Image), typeof(Button));
+            Undo.RegisterCreatedObjectUndo(btnGo, "Btn_Settings");
+            btnGo.transform.SetParent(root, false);
+            Image img = btnGo.GetComponent<Image>();
+            img.color = new Color(0.15f, 0.17f, 0.22f, 0.95f);
+            Button bt = btnGo.GetComponent<Button>();
+            bt.targetGraphic = img;
+
+            RectTransform brt = btnGo.GetComponent<RectTransform>();
+            brt.anchorMin = Vector2.zero;
+            brt.anchorMax = Vector2.one;
+            brt.offsetMin = Vector2.zero;
+            brt.offsetMax = Vector2.zero;
+
+            GameObject lbl = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            lbl.transform.SetParent(btnGo.transform, false);
+            RectTransform lrt = lbl.GetComponent<RectTransform>();
+            lrt.anchorMin = Vector2.zero;
+            lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = Vector2.zero;
+            lrt.offsetMax = Vector2.zero;
+            Text tx = lbl.GetComponent<Text>();
+            tx.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            tx.fontSize = 20;
+            tx.alignment = TextAnchor.MiddleCenter;
+            tx.color = Color.white;
+            tx.text = "설정";
+            tx.raycastTarget = false;
+        }
+
+        HudTabPlaceholder tab = btnGo.GetComponent<HudTabPlaceholder>();
+        if (tab == null)
+            tab = Undo.AddComponent<HudTabPlaceholder>(btnGo);
+
+        using (SerializedObject soTab = new SerializedObject(tab))
+        {
+            SerializedProperty panelProp = soTab.FindProperty("targetPanel");
+            if (panelProp != null && settingsPanel != null)
+                panelProp.objectReferenceValue = settingsPanel.gameObject;
+            soTab.ApplyModifiedProperties();
+        }
+
+        ApplySettingsButtonVisual(btnGo);
+
+        WireHudTabToggleClick(btnGo);
+        return root;
+    }
+
+    static void ApplySettingsButtonVisual(GameObject btnGo)
+    {
+        if (btnGo == null)
+            return;
+
+        const string gearIconPath = "Assets/0.Asset/500FreeSkillIcons/Icons/skill_522.png";
+        const string uiSheetPath = "Assets/0.Asset/Undead Survivor/Sprites/UI.png";
+
+        Sprite gearIcon = AssetDatabase.LoadAssetAtPath<Sprite>(gearIconPath);
+        Sprite frameSprite = null;
+        Object[] uiAssets = AssetDatabase.LoadAllAssetsAtPath(uiSheetPath);
+        for (int i = 0; i < uiAssets.Length; i++)
+        {
+            if (uiAssets[i] is Sprite sprite && sprite.name == "Box 1")
+            {
+                frameSprite = sprite;
+                break;
+            }
+        }
+
+        Image bg = btnGo.GetComponent<Image>();
+        if (bg != null)
+        {
+            Undo.RecordObject(bg, "Settings button frame");
+            if (frameSprite != null)
+            {
+                bg.sprite = frameSprite;
+                bg.color = Color.white;
+                bg.type = Image.Type.Simple;
+            }
+            else
+            {
+                bg.sprite = null;
+                bg.color = new Color(0.15f, 0.17f, 0.22f, 0.95f);
+                bg.type = Image.Type.Simple;
+            }
+            bg.preserveAspect = false;
+        }
+
+        Transform iconTf = btnGo.transform.Find("Icon");
+        if (iconTf == null)
+        {
+            GameObject iconGo = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+            Undo.RegisterCreatedObjectUndo(iconGo, "SettingsIcon");
+            iconGo.transform.SetParent(btnGo.transform, false);
+            iconTf = iconGo.transform;
+            RectTransform iconRt = iconGo.GetComponent<RectTransform>();
+            iconRt.anchorMin = new Vector2(0.1f, 0.1f);
+            iconRt.anchorMax = new Vector2(0.9f, 0.9f);
+            iconRt.offsetMin = Vector2.zero;
+            iconRt.offsetMax = Vector2.zero;
+        }
+
+        Image iconImg = iconTf.GetComponent<Image>();
+        if (iconImg == null)
+            iconImg = Undo.AddComponent<Image>(iconTf.gameObject);
+
+        Undo.RecordObject(iconImg, "Settings gear icon");
+        iconImg.raycastTarget = false;
+        iconImg.preserveAspect = true;
+        iconImg.color = Color.white;
+        iconImg.sprite = gearIcon;
+
+        Transform lblTr = btnGo.transform.Find("Label");
+        if (lblTr != null)
+        {
+            Undo.RecordObject(lblTr.gameObject, "Hide settings label");
+            lblTr.gameObject.SetActive(false);
+        }
     }
 
     static void EnsureWeaponGridSlot(
